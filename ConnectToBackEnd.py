@@ -1,9 +1,13 @@
-import requests
+#import requests
+import requests_async as requests
 import json
 from datetime import datetime
 import os
 from obs import ObsClient
 from CharacterExtraction import *
+import threading
+import schedule
+import flask
 
 userAuth={"userName" :"superuser", "passWord":"superuser3dms"}
 apiConfig={ "userPortalHost": "https://www.docubinet.com",
@@ -17,8 +21,7 @@ huaweiObjectStorageConfig={
   "bucketName": "001-docubinet",
 }
 
-userToken=""
-baseUrl=apiConfig["userPortalHost"]+":"+"userPortalPort"
+baseUrl=apiConfig["userPortalHost"]+":"+apiConfig["userPortalPort"]
 OCRtype="2"
 fileList=[]
 
@@ -26,24 +29,30 @@ path=os.getcwd()
 UploadDir=os.path.join(path,"UploadDir")
 if not os.path.isdir(UploadDir):
     os.mkdir(UploadDir)
-
-#Creating directory for save extracted textfile
-OCRDir=os.path.join(path,"OCRDir")
-if not os.path.isdir(OCRDir):
-    os.mkdir(OCRDir)
-
-
-
+    
+def mainMethod():
+    schedule.every(24).hours.do(implement_getUserToken)
+    schedule.every(5).seconds.do(implement_getIntermediateOCR())
+    while True:
+        schedule.run_pending()
 def mainProcess():
-    getUserToken()
-    getIntermeadiateOCR()
+    #getUserToken will run fisrt and main thread will stay until thread1 finished
+    #thread1=threading.Thread(target=getUserToken)
+    #thread1.start()
+    #thread1.join()
+    #After completion of thread1 thread2 wil start and also main thread will stay until completion of thread2
+    #thread2=threading.Thread(target=getIntermediateOCR)
+    #thread1.start()
+    #thread2.join()
+    #getUserToken()
+    #getIntermeadiateOCR()
     if len(cabinetData)!=0:
-        dic2={}
+        dict2={}
         for data in cabinetData:
             recordId=str(data["recordId"])
             cabinetName=str(data["cabinetname"])
             fileNameList=data["images"]
-            dic1={}
+            content=""
             for fname in fileNameList:
                 fileName=str(fname)
                 path=cabinetName.lower()+"-"+datetime.now().year+"/"+fileName
@@ -54,31 +63,38 @@ def mainProcess():
                 downloadedFile=os.path.join(UploadDir,fileName)
                 text=process(downloadedFile,fextension)
                 os.remove(downloadedFile)
-                dic1[fileName]=text
-            dic2[cabinetName]=dic1
-            
-            
-           
-                
-            
-            
+                content=content+text
+            dict2[recordId]=content
+            deleteItermediateOCR(recordId)
+        sendResponse(dict2)  
+#getUserToken will run fisrt and main thread will stay until thread1 finished            
+def implement_getUserToken():
+    thread1=threading.Thread(target=getUserToken)
+    thread1.start()
+    thread1.join()
 
-
-
-def getUserToken():
+#After completion of thread1 thread2 wil start and also main thread will stay until completion of thread2
+def implement_getIntermediateOCR():
+    thread2=threading.Thread(target=getIntermediateOCR)
+    thread2.start()
+    thread2.join()
+    mainProcess()
+async def getUserToken():
     global userToken
-    jsonUserAuth=json.dump(userAuth)
+    global header
+    jsonUserAuth=json.dumps(userAuth)
     
-    response=requests.post(baseUrl+"/api/login",json=jsonUserAuth)
+    #response=requests.post(baseUrl+"/api/login",json=jsonUserAuth)
+    response=await requests.post(baseUrl+"/api/login",json=jsonUserAuth)
     parseJson=json.loads(response.json())
 
     userToken=parseJson["token"]
+    header={"Authorization":"Bearer "+userToken}
     response.close()
 
-def getIntermeadiateOCR():
+async def getIntermediateOCR():
     global cabinetData
-    header={"Authorization":"Bearer {userToken}"}
-    response=requests.get(baseUrl+"/"+"api/manage-ocr/get-intermediate-ocr/{OCRtype}",headers=header)
+    response=await requests.get(baseUrl+"/"+"api/manage-ocr/get-intermediate-ocr/"+OCRtype,headers=header)
     parsejson=json.loads(response.json())
     cabinetData=parsejson["IntermediateOcr"]
 
@@ -99,14 +115,34 @@ def downloadfile(filepath,fileName):
     objectKey=filepath
     dfilePath=os.path.join(UploadDir,fileName)
     try:
-        res=obsClient.getObject(bucketName, objectKey, downloadPath=dfilePath)
-        if res.status()<300:
-            print("Downloadede Successfully")
+        response=obsClient.getObject(bucketName, objectKey, downloadPath=dfilePath)
+        if response.status()<300:
+            print("Downloaded Successfully")
             fileList.append(fileName)
         else:
-            print(res.errorMessage)
+            print(response.errorMessage)
+        
     except:
         import traceback
         print(traceback.format_exc())
+    obsClient.close()
     
-    
+async def sendResponse(dic2):
+    jsonResponse=json.dumps(dic2)
+    url=apiConfig["enterpriseSearchHost"]+":"+apiConfig["enterpriseSearchPort"]
+    response=await requests.put(url+"/"+"api/enterpriseSearch/add-ocr-data",json=jsonResponse,headers=header)
+    if response.status_code()<300:
+        print("Response has been sent Successfully")
+    else:
+        print("Error in sending response")
+    response.close()
+
+async def deleteItermediateOCR(recordId):
+    response=await requests.delete(baseUrl+"/delete-intermediate-ocr/"+recordId,headers=header)
+    if response.status_code<300:
+        print("deleted IntermdiateOCRrecord successfully")       
+    else:
+        print("Error in deleting IntermdiateOCRrecord")
+    response.close()
+
+mainMethod()
