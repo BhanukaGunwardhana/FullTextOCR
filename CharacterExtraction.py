@@ -9,29 +9,29 @@ import docx
 import docxpy
 import openpyxl
 import numpy as np
-from ConnectToBackEnd import OCRDir
 
 
-textFile=open(os.path.join(OCRDir,"file.txt"),"w",encoding="utf-8")
+
+
 stringDic={}
 
 #main processing function
-def process(file,fileExtension):
+def process(filepath,fileExtension):
     bool = checkingForImage(fileExtension)
     
     if bool:
-        return extractTextByOCR(file) 
+        return extractTextByOCR(filepath) 
 
     if(fileExtension=="pdf"):
-        extractTextFromPDF(file)
+        extractTextFromPDF(filepath)
 
     if(fileExtension=="docx"):
-       return extractTextFromDOCX(file)
+       return extractTextFromDOCX(filepath)
     
     if(fileExtension=="xlsx"):
-        extractTextFromExcel(file)
+        extractTextFromExcel(filepath)
             
-#checking for image or other file formats(pdf,doc,exl,etc)
+#checking for image or other filepath formats(pdf,doc,exl,etc)
 def  checkingForImage(fileExtension):
     imageString="jpgpngtifftifbmpwebppbmpgmppmxpmxbm"
     search=re.search(fileExtension.lower(),imageString)
@@ -41,17 +41,12 @@ def  checkingForImage(fileExtension):
         return False
 
 #function for extracting text from images with pytesseract
-def extractTextByOCR(file):
-    global textFile
-    image=cv.imread(file)
-
+def extractTextByOCR(filepath):
+    image=cv.imread(filepath)
     grayImage=cv.cvtColor(image,cv.COLOR_BGR2GRAY)
     
     kernel = np.ones((5,5),np.uint8)
-
     dialation = cv.dilate(grayImage,kernel,iterations=1)
-   
-
     erosion = cv.erode(dialation,kernel,iterations = 1)
    
     
@@ -69,9 +64,9 @@ def extractTextByOCR(file):
     return stringtext
 
 #extracting readable text from pdf n write it on textfile
-def extractTextFromPDF(file):
+def extractTextFromPDF(filepath):
     
-    pdfFile=open(file,"rb")
+    pdfFile=open(filepath,"rb")
     pdfFileReader=PyPDF2.PdfReader(pdfFile)
     stringText=""
     pageList=pdfFileReader.pages
@@ -81,21 +76,21 @@ def extractTextFromPDF(file):
     return stringText
     
 #extracting readable text from worddoc n write it on textfile
-def extractTextFromDOCX(file):
+def extractTextFromDOCX(filepath):
     stringText=""
-    docFile=open(file,"rb")
+    docFile=open(filepath,"rb")
     newdoc=docx.Document(docFile)
     paraList=newdoc.paragraphs
     for paragraph in paraList:
         stringText=stringText+paragraph.text
     return stringText
     
-def extractTextFromDOCXwithdocxpy(file):
-    return docxpy.process(file)        
+def extractTextFromDOCXwithdocxpy(filepath):
+    return docxpy.process(filepath)        
 #extracting readable text from excel sheet n write it on textfile
-def extractTextFromExcel(file):
+def extractTextFromExcel(filepath):
     global textFile
-    dataFrame=pd.read_excel(file)
+    dataFrame=pd.read_excel(filepath)
     stringText=""
     for i,j in dataFrame.iterrows():
         stringText=stringText+str(i)+" "+str(j)
