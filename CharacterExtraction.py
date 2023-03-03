@@ -45,9 +45,9 @@ def extractTextByOCR(filepath):
     image=cv.imread(filepath)
     grayImage=cv.cvtColor(image,cv.COLOR_BGR2GRAY)
     
-    kernel = np.ones((5,5),np.uint8)
-    dialation = cv.dilate(grayImage,kernel,iterations=1)
-    erosion = cv.erode(dialation,kernel,iterations = 1)
+    #kernel = np.ones((5,5),np.uint8)
+    #dialation = cv.dilate(grayImage,kernel,iterations=1)
+    #erosion = cv.erode(dialation,kernel,iterations = 1)
    
     
     #bluredImage=cv.GaussianBlur(dialation,(3,3),0)
@@ -60,7 +60,7 @@ def extractTextByOCR(filepath):
     
     #cv.imwrite(os.path.join(OCRDir,"fimage.png"),thresholdImage)
     pytesseract.pytesseract.tesseract_cmd = r'C:\Users\USER\AppData\Local\Tesseract-OCR\tesseract.exe'
-    stringtext=pytesseract.image_to_string(erosion, lang=("eng"))
+    stringtext=pytesseract.image_to_string(grayImage, lang=("eng"))
     return stringtext
 
 #extracting readable text from pdf n write it on textfile

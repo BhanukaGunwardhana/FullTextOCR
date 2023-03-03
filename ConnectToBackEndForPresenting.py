@@ -12,9 +12,6 @@ import schedule
 from CharacterExtraction import *  
 from datetime import datetime
 from pymongo import MongoClient
-import shutil
-
-
 
 userAuth={'username':'superuser','password':'superuser3dms'}
 apiConfig={ "userPortalHost": "http://localhost",# "https://www.docubinet.com"
@@ -42,24 +39,19 @@ async def mainMethod():
     while True:
         schedule.run_pending()
 """
-async def mainMethod_():
+def mainMethod_():
     while True:
-        #global session
-        #async with aiohttp.ClientSession() as session:
-            await getUserToken_()
-            t1=time.perf_counter_ns()
-            while True:
-                #asyncio.run(getIntermediateOCR_())
-                async with aiohttp.ClientSession() as session:
-                    await getIntermediateOCR_(session)
-                    time.sleep(5)
-                    t2=time.perf_counter_ns()
-                    dt=(t2-t1)
-                await session.close()
-                if(dt/((10**9)*3600)>=23):
-                        break
-            
-async def mainProcess(session):
+        asyncio.run(getUserToken_())
+        #print("took a userToken")
+        t1=time.perf_counter_ns()
+        while True:
+            asyncio.run(getIntermediateOCR_())
+            time.sleep(5)
+            t2=time.perf_counter_ns()
+            dt=(t2-t1)
+            if(dt/((10**9)*3600)>=23):
+                break
+async def mainProcess():
     if len(cabinetData)!=0:
         for data in cabinetData:
             recordId=str(data["recordId"])
@@ -76,16 +68,15 @@ async def mainProcess(session):
                     month=datetime.now().strftime("%B")
                     date_=datetime.now().day
                     fileName=str(fname)
+                    path=cabinetName.lower()+"-"+str(year)+"/"+str(month)+"/"+str(date_)+"/"+fileName
                     flist=str(fileName).split(".")
                     fbaseName=flist[0]
                     fextension=flist[1]
                     if (storageType==3):
-                        path=cabinetName.lower()+"-"+str(year)+"/"+str(month)+"/"+str(date_)+"/"+fileName
                         downloadfilefromHuawieCloud(path,fileName)
                         fileIsDownloaded=True
                     if storageType==5:
                         print("None")
-                        getfilefromOnpremise(cabinetName,fileName)
                         #function to download file form onpremise
                     #implement_downloadFile(path,fileName)
                     if fileIsDownloaded==True:
@@ -104,42 +95,6 @@ async def mainProcess(session):
                     await deleteIntermediateOCR_(recordId)
                 if len(content)==0:
                     print("Error in image processing")
-        """
-        for data in cabinetData:
-            recordId=str(data["recordId"])
-            cabinetName=(data["cabinetName"])
-            fileNameList=data["images"]
-            content=""
-            dict={}
-            textfile=open(os.path.join(UploadDir,recordId+"file.txt"),"w",encoding="utf-8")
-            if len(fileNameList)!=0:
-                for fname in fileNameList:
-                    year=datetime.now().year
-                    month=datetime.now().strftime("%B")
-                    date_=datetime.now().day
-                    fileName=str(fname)
-                    path=cabinetName.lower()+"-"+str(year)+"/"+str(month)+"/"+str(date_)+"/"+fileName
-                    flist=str(fileName).split(".")
-                    fbaseName=flist[0]
-                    fextension=flist[1]
-                    if downloadfile(path,fileName):
-                    #implement_downloadFile(path,fileName)
-                        downloadedFile=os.path.join(UploadDir,fileName)
-                        text=process(downloadedFile,fextension)
-                        os.remove(downloadedFile)
-                        content=content+text
-                if len(content)!=0:
-                    textfile.write(content)
-                    textfile.close()
-                    dict["recordId"]=recordId
-                    dict["ocrData"]=content
-                    #implementsendResponse(dict)
-                    await sendResponse_(dict,session)
-                    #implementdeleteIntermediateOCR(recordId)
-                    await deleteIntermediateOCR_(recordId,session)
-                if len(content)==0:
-                    print("Error in image processing")
-                """
 #Only for testing purpose
 def testtextextraction(fileName):
     path_=os.path.join(UploadDir,fileName)
@@ -171,6 +126,7 @@ async def getUserToken():
 async def getUserToken_():
     global userToken
     global header
+    global session
     header={"Content-Type": "application/json"}
     jsonUserAuth=json.dumps(userAuth)
     content=jsonUserAuth.encode('utf-8')
@@ -185,13 +141,13 @@ async def getUserToken_():
                     header["Authorization"]="Bearer "+userToken
                     
                 else:
-                    print("Bad response")
                     print(response.__str__())
+                    print("error in taking userToken")
                 response.close()
         except:
             print("Error occured while getting userToken")
-    await session.close()   
-             
+            
+         
 """               
 async def getIntermediateOCR():
     global cabinetData
@@ -200,25 +156,19 @@ async def getIntermediateOCR():
         parsejson=json.loads(response.json())
         cabinetData=parsejson["IntermediateOcr"]
 """
-async def getIntermediateOCR_(session):
+async def getIntermediateOCR_():
     global cabinetData
-    #async with aiohttp.ClientSession() as session:
-    #try:
-    async with session.get(baseUrl+"/api/manage-ocr/get-intermediate-ocr/"+OCRtype,headers=header) as response:
-        if response.status<300:
-            print("Listening..")
-            parsejson=await response.json()
-            cabinetData=parsejson["IntermediateOcr"]
-            #print(cabinetData)
-        else:
-            print("Bad response")
-            print(response.content.__str__())  
-        response.close()
-    await mainProcess(session)
-    #except Exception(e):
-        
-        
-        
+    async with aiohttp.ClientSession() as session:
+        async with session.get(baseUrl+"/api/manage-ocr/get-intermediate-ocr/"+OCRtype,headers=header) as response:
+            if response.status<300:
+                print("ok")
+                parsejson=await response.json()
+                cabinetData=parsejson["IntermediateOcr"]
+                print(cabinetData)
+            else:
+                print(response.content.__str__())  
+            response.close()
+    await mainProcess()
 #async def getfilepath(recordId,cabinetname,fileName):
     
 def downloadfilefromHuawieCloud(filepath,fileName):
@@ -233,30 +183,37 @@ def downloadfilefromHuawieCloud(filepath,fileName):
         secret_access_key=secretAccessKey,
         server=endPoint
     )
-    #print(accessKeyId+" # "+secretAccessKey+" # "+endPoint)
+    print(accessKeyId+" # "+secretAccessKey+" # "+endPoint)
     
     bucketName=huaweiObjectStorageConfig["bucketName"]
     objectKey=filepath
+    #dev_huawei_zone_ocr-2023/63ff1c7c60feb53b941e0156_00001.png
     #objectKey="dev_huawei_zone_ocr-2023/March/1/63ff1c7c60feb53b941e0156_00001.png"
     dfilePath=os.path.join(UploadDir,fileName)
     try:
-        response=obsClient.downloadFile(bucketName, objectKey,downloadFile=dfilePath)
+       # response=obsClient.getObject(bucketName, objectKey, downloadPath=os.path.join(UploadDir,fileName),#downloadPath=dfilePath
+        #                             loadStreamInMemory=True)
+        response=obsClient.downloadFile(bucketName, objectKey,downloadFile=os.path.join(UploadDir,fileName),#downloadPath=dfilePath
+        
+                                     )
         if response.status<300:
             print("Downloaded Successfully")
             obsClient.close()
             return True
+            fileList.append(fileName)
         else:
             print(response.errorMessage)
-            print(response.content.__str__())  
+            print(response.status)
             obsClient.close()
             return False
         
     except:
         import traceback
         print(traceback.format_exc())
-        print("Error occured while downloading the file")
-        obsClient.close()
-        return False
+        print("Except block was called")
+    
+    obsClient.close()
+    return False
 """    
 async def sendResponse(dict):
     jsonResponse=json.dumps(dict)
@@ -267,26 +224,18 @@ async def sendResponse(dict):
     else:
         print("Error in sending response")
     response.close()
-"""
-def getfilefromOnpremise(cabinetName,fileName):
-    filepath=r"C:\DOCUBINETLOCALFILES\\" + cabinetName + "\\" + fileName
-    destinationpath=os.path.join(UploadDir,fileName)
-    shutil.copy2(filepath, destinationpath)
-       
-async def sendResponse_(dict,session):
+""" 
+async def sendResponse_(dict):
     jsonResponse=json.dumps(dict)
     url=apiConfig["enterpriseSearchHost"]+":"+apiConfig["enterpriseSearchPort"]
-    #async with aiohttp.ClientSession() as session:
-    try:
+    async with aiohttp.ClientSession() as session:
         async with session.put(url+"/api/enterprise-search/add-ocr-data",headers=header,data=jsonResponse) as response:
             if response.status<300:
-                print("Extracted content has been sent Successfully")
+                print("Response has been sent Successfully")
             else:
-                print("Bad response status")
-                print(response.content.__str__())  
+                print(response.status)
+                print("Error in sending response")
             response.close()
-    except:
-        print("Error occured while sending ExtractedText")
 """        
 async def deleteItermediateOCR(recordId):
     response=await requests.delete(baseUrl+"/delete-intermediate-ocr/"+recordId,headers=header)
@@ -296,19 +245,14 @@ async def deleteItermediateOCR(recordId):
         print("Error in deleting IntermdiateOCRrecord")
     response.close()
 """
-async def deleteIntermediateOCR_(recordId,session):
-    #async with aiohttp.ClientSession() as session:
-    try:
+async def deleteIntermediateOCR_(recordId):
+    async with aiohttp.ClientSession() as session:
         async with session.delete(baseUrl+"/api/manage-ocr/delete-intermediate-ocr/"+recordId,headers=header) as response:
             if response.status<300:
                 print("deleted IntermdiateOCRrecord successfully")       
             else:
-                print("Bad response status")
-                print(response.content.__str__())  
+                print("Error in deleting IntermdiateOCRrecord")
             response.close()
-    except:
-        print("Error occured while deleting IntermediateOCRREcord")
-
 def getStorageType_(cabinetName):
     client=MongoClient("mongodb+srv://sa:i5sjdrShyfoOowvY@cluster0.iqvet.mongodb.net/docubinet?retryWrites=true&w=majority")
     db = client['docubinet']
@@ -317,5 +261,4 @@ def getStorageType_(cabinetName):
     for cabinet in collectionCabinet.find():
             if cabinetName==cabinet['cabinetName']:
                 return cabinet['location']['storageType']
-  
-asyncio.run(mainMethod_())
+mainMethod_()

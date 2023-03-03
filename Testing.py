@@ -10,6 +10,7 @@ import openpyxl
 import numpy as np
 
 url="MicrosoftTeams-image (1).png"
+F:\DMS\Docubinet_FulltextOCR\__pycache__\ConnectToBackEnd.cpython-311.pyc
 
 #Creating directory fro file uploading
 path=os.getcwd()
